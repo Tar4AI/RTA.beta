@@ -72,8 +72,12 @@
       html::before{left:0;width:env(safe-area-inset-left)} html::after{right:0;width:env(safe-area-inset-right)}
     }
 
-    .wrap{display:flex;flex-direction:column;gap:12px;max-width:920px;margin:0 auto;
-      padding-left:calc(72px + env(safe-area-inset-left));
+    .wrap{
+      display:flex;flex-direction:column;gap:12px;max-width:920px;
+      /* MODIFIED: Changed padding to margin to prevent overlap with fixed FAB */
+      margin-left: calc(72px + env(safe-area-inset-left));
+      margin-right: auto;
+      padding-left: 12px;
       padding-right:calc(12px + env(safe-area-inset-right));
       padding-top:calc(12px + env(safe-area-inset-top));
       padding-bottom:calc(12px + env(safe-area-inset-bottom));
@@ -177,7 +181,7 @@
 
     <div class="card">
       <div class="row" style="justify-content:space-between;align-items:center;">
-        <h2 style="margin:0 0 4px 0">my RTAs (v 1.4)</h2>
+        <h2 style="margin:0 0 4px 0">my RTAs (v 1.5)</h2>
       </div>
 
       <div class="row" style="margin-top:8px">
