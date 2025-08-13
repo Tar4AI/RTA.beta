@@ -63,6 +63,9 @@
       color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans Thai",sans-serif;
       -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; overscroll-behavior:contain;
       transition: background .3s, color .3s;
+      /* MODIFIED: Add padding to body to make space for FAB */
+      padding-left: calc(72px + env(safe-area-inset-left));
+      box-sizing: border-box;
     }
     /* Safe Area */
     body::before,body::after{content:"";position:fixed;left:0;right:0;z-index:9999;background:var(--bg1);pointer-events:none}
@@ -74,8 +77,8 @@
 
     .wrap{
       display:flex;flex-direction:column;gap:12px;max-width:920px;
-      margin-left: calc(72px + env(safe-area-inset-left));
-      margin-right: auto;
+      /* MODIFIED: Use margin: auto to center in the remaining space */
+      margin: 0 auto;
       padding-left: 12px;
       padding-right:calc(12px + env(safe-area-inset-right));
       padding-top:calc(12px + env(safe-area-inset-top));
@@ -114,7 +117,6 @@
     #fab-controls {
         position: fixed; top: 50%; left: calc(12px + env(safe-area-inset-left));
         transform: translateY(-50%); 
-        /* MODIFIED: Increased z-index to be on top of everything */
         z-index: 10000; 
         display: flex; flex-direction: column; gap: 10px;
         background-color: rgba(45, 55, 72, 0.7); padding: 10px;
@@ -143,6 +145,9 @@
       padding: 12px;
       padding-top: calc(12px + env(safe-area-inset-top));
       padding-bottom: calc(12px + env(safe-area-inset-bottom));
+      /* MODIFIED: Fullscreen padding respects FAB on the left */
+      padding-left: calc(12px + 72px + env(safe-area-inset-left));
+      padding-right: calc(12px + env(safe-area-inset-right));
       box-sizing: border-box;
     }
     .card.maximized .plot { 
@@ -1207,4 +1212,4 @@
   })();
   </script>
 </body>
-</html>
+</ht
