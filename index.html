@@ -269,47 +269,42 @@
     /* mini step buttons for calibration */
     .btn-step { height:30px; min-width:34px; padding:0 8px; border-radius:8px; font-weight:800; }
   
-/* === iPad PWA (Add to Home Screen) fullscreen fix ===
-   Target only standalone display-mode so normal browser behavior is unaffected.
-   Avoid 100vw/100vh which cause horizontal overflow on iPad PWA.
+/* === Mobile phone LANDSCAPE fullscreen fix ===
+   Only when in landscape and small screens.
+   Use modern dynamic viewport units when available; otherwise, use safe-area insets.
+   This avoids right-edge cropping and hidden browser bars issues.
 */
-@media (display-mode: standalone) {
-  .card.is-fullscreen{
+@media (orientation: landscape) and (max-width: 900px) {
+  /* Fallback fullscreen (when requestFullscreen not available) */
+  .card.is-fullscreen {
     position: fixed;
-    /* respect safe areas when in standalone */
     top: env(safe-area-inset-top);
+    bottom: env(safe-area-inset-bottom);
     left: env(safe-area-inset-left);
     right: env(safe-area-inset-right);
-    bottom: env(safe-area-inset-bottom);
-    width: auto;   /* avoid 100vw */
-    height: auto;  /* avoid 100vh */
     margin: 0;
     border-radius: 0;
+    width: auto;   /* avoid 100vw which can overflow on mobile */
+    height: auto;  /* avoid 100vh which ignores dynamic toolbars */
     padding: 12px;
-    padding-top: 8px;
     box-sizing: border-box;
     overflow: hidden;
   }
-  .card.is-fullscreen .plot{ height: calc(100% - 120px); }
-  :fullscreen .plot{ height: calc(100% - 120px); }
+  /* Prefer dynamic viewport when supported */
+  @supports (height: 100dvh) {
+    .card.is-fullscreen {
+      inset: 0;
+      width: 100dvw;
+      height: 100dvh;
+      padding: 12px;
+    }
+  }
+  /* Ensure inner plot fits dynamic height */
+  .card.is-fullscreen .plot { height: calc(100% - 120px); }
+  :fullscreen .plot { height: calc(100dvh - 120px); }
+  :-webkit-full-screen .plot { height: calc(100dvh - 120px); }
+  html, body { overflow-x: hidden; }
 }
-/* Fallback for older iOS that lacks (display-mode) — use .standalone class set by JS */
-html.standalone .card.is-fullscreen{
-  position: fixed;
-  top: env(safe-area-inset-top);
-  left: env(safe-area-inset-left);
-  right: env(safe-area-inset-right);
-  bottom: env(safe-area-inset-bottom);
-  width: auto;
-  height: auto;
-  margin: 0;
-  border-radius: 0;
-  padding: 12px 12px 12px 12px;
-  padding-top: 8px;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-html, body { overflow-x: hidden; } /* prevent accidental horizontal scrollbars in PWA */
 
 </style>
 </head>
@@ -469,7 +464,7 @@ html, body { overflow-x: hidden; } /* prevent accidental horizontal scrollbars i
                 <input id="heatmapRangeSlider" type="range" min="5" max="100" step="5" value="50" aria-label="Heatmap range">
                 <select id="heatmapRangePreset">
                   <option value="5">5</option><option value="10">10</option><option value="20">20</option><option value="40">40</option>
-                  <option value="50" selected>50</option><option value="60">60</option><option value="80">80</option><option value="100">100</option>
+                  <option value="50" selected>50</option><option value="60">60</option><option value="85">80</option><option value="100">100</option>
                 </select>
               </label>
               <span class="hint" id="heatmapRangeText">-50 dBFS</span>
@@ -538,7 +533,7 @@ html, body { overflow-x: hidden; } /* prevent accidental horizontal scrollbars i
           <button id="btnCalibDec" class="secondary btn-step" aria-label="ลดค่า">−</button>
           <input type="range" id="calibrationSlider" min="50" max="150" step="1" value="85" style="flex:1 1 200px; min-width: 150px;">
           <button id="btnCalibInc" class="secondary btn-step" aria-label="เพิ่มค่า">+</button>
-          <input type="number" id="calibrationOffset" value="85" min="50" max="150" step="1" style="width: 70px; text-align: center;">
+          <input type="number" id="calibrationOffset" value="80" min="50" max="150" step="1" style="width: 70px; text-align: center;">
         </div>
       </div>
 
@@ -559,21 +554,7 @@ html, body { overflow-x: hidden; } /* prevent accidental horizontal scrollbars i
     <button id="fabAwt"   class="fab" title="A-weighting" aria-pressed="false">👂</button>
   </div>
 
-  
-<script>
-// Mark standalone (PWA) mode for older iOS Safari and modern browsers.
-(function(){
-  try{
-    var isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) 
-                       || (typeof navigator !== 'undefined' && 'standalone' in navigator && navigator.standalone);
-    if(isStandalone){
-      document.documentElement.classList.add('standalone');
-    }
-  }catch(e){/* no-op */}
-})();
-</script>
-
-<script>
+  <script>
   (() => {
     class RTAnalyzer{
       constructor(){
@@ -833,41 +814,6 @@ html, body { overflow-x: hidden; } /* prevent accidental horizontal scrollbars i
       mapDbToColorHeatmap(db){const maxDb=0,minDb=maxDb-this.state.heatmapRangeMax; const t=this.clamp01((db-minDb)/(maxDb-minDb)); if(t<0.25) return this.colors.heatmap[0]; if(t<0.5) return this.colors.heatmap[1]; if(t<0.75) return this.colors.heatmap[2]; if(t<0.9) return this.colors.heatmap[3]; return this.colors.heatmap[4]; }
       freqToBin(f){const N=this.state.freqArray.length; const fpb=this.state.sampleRate/(2*N); return Math.min(N-1,Math.max(0,Math.round(f/fpb))); }
 
-      // ====== Bands & Heatmap bins ======
-      genBands(n){
-        // fractional-octave bands from ~20 Hz to Nyquist
-        const bands=[];
-        const r=Math.pow(2,1/n);
-        const fmin=20;
-        const fmax=this.fmax();
-        // start center freq at fmin and step by r
-        let fc=fmin;
-        const sqrtR=Math.sqrt(r);
-        while(fc<=fmax){
-          const fl=Math.max(fmin, fc/sqrtR);
-          const fh=Math.min(fmax, fc*sqrtR);
-          bands.push({fc,fl,fh});
-          fc*=r;
-        }
-        return bands;
-      }
-      genHeatmapBins(){
-        // Map FFT bin -> heatmap row (log scale)
-        const N=this.state.analyser ? this.state.analyser.frequencyBinCount : 1024;
-        const map=new Uint16Array(N);
-        const fmin=20, fmax=this.fmax();
-        const fpb=this.state.sampleRate/(2*N);
-        const logMin=Math.log10(fmin), logSpan=Math.log10(fmax)-logMin;
-        const bins=this.state.heatmapIsHD?this.HEATMAP_BINS_HD:this.HEATMAP_BINS_SD;
-        for(let i=0;i<N;i++){
-          const f=i*fpb;
-          const t=(Math.log10(Math.max(f,fmin))-logMin)/logSpan;
-          const idx=Math.max(0, Math.min(bins-1, Math.floor(t*(bins))));
-          map[i]=idx;
-        }
-        return map;
-      }
-
       // ====== Background grids ======
       drawFFTBackground(){ const ctx=this.canvases.fft.ctx; if(!ctx) return; const w=ctx.canvas.width/(devicePixelRatio||1), h=ctx.canvas.height/(devicePixelRatio||1); const plotH=h-this.PAD.T-this.PAD.B; ctx.clearRect(0,0,w,h); ctx.strokeStyle=this.colors.gridH; for(let i=0;i<6;i++){ const y=this.PAD.T+(i/5)*plotH; ctx.beginPath(); ctx.moveTo(this.PAD.L,y); ctx.lineTo(w-this.PAD.R,y); ctx.stroke(); } ctx.strokeStyle=this.colors.gridV; const ticks=[20,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,2000,4000,8000,16000]; ticks.forEach(t=>{ const x=this.mapLogX(t,w); ctx.beginPath(); ctx.moveTo(x,this.PAD.T); ctx.lineTo(x,this.PAD.T+plotH); ctx.stroke(); }); ctx.strokeStyle=this.colors.frame; ctx.strokeRect(this.PAD.L,this.PAD.T,w-this.PAD.L-this.PAD.R,plotH); ctx.fillStyle=this.colors.label; ctx.font='12px system-ui'; ctx.textBaseline='alphabetic'; [31.5,63,125,250,500,1000,2000,4000,8000,16000].forEach(t=>{ const x=this.mapLogX(t,w); ctx.fillText(t>=1000?(t/1000)+'k':t,x-8,h-this.LABEL_Y); }); ctx.textAlign='right'; ctx.textBaseline='middle'; for(let i=0;i<=5;i++){ const y=this.PAD.T+(i/5)*plotH; const label=this.state.fftYScaleIsLog?`${-i*20}`:(1-i/5).toFixed(1); ctx.fillText(label,this.PAD.L-8,y); } }
       drawLogGrid(ctx){ if(!ctx) return; const w=ctx.canvas.width/(devicePixelRatio||1), h=ctx.canvas.height/(devicePixelRatio||1); const plotH=h-this.PAD.T-this.PAD.B; ctx.clearRect(0,0,w,h); ctx.strokeStyle=this.colors.gridH; for(let i=0;i<6;i++){ const y=this.PAD.T+(i/5)*plotH; ctx.beginPath(); ctx.moveTo(this.PAD.L,y); ctx.lineTo(w-this.PAD.R,y); ctx.stroke(); } ctx.strokeStyle=this.colors.gridV; const ticks=[20,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,2000,4000,8000,16000]; ticks.forEach(t=>{ const x=this.mapLogX(t,w); ctx.beginPath(); ctx.moveTo(x,this.PAD.T); ctx.lineTo(x,this.PAD.T+plotH); ctx.stroke(); }); ctx.strokeStyle=this.colors.frame; ctx.strokeRect(this.PAD.L,this.PAD.T,w-this.PAD.L-this.PAD.R,plotH); ctx.fillStyle=this.colors.label; ctx.font='12px system-ui'; ctx.textBaseline='alphabetic'; [31.5,63,125,250,500,1000,2000,4000,8000,16000].forEach(t=>{ const x=this.mapLogX(t,w); ctx.fillText(t>=1000?(t/1000)+'k':t,x-8,h-this.LABEL_Y); }); }
@@ -925,19 +871,6 @@ html, body { overflow-x: hidden; } /* prevent accidental horizontal scrollbars i
 
       // ====== Floating dock sync ======
       syncFloating(){ this.dom.fabStart.disabled=this.dom.btnStart.disabled; this.dom.fabStop.disabled=this.dom.btnStop.disabled; this.dom.fabHold.setAttribute('aria-pressed',this.state.holdEnabled); this.dom.fabAwt.setAttribute('aria-pressed',this.state.aWeightEnabled); }
-
-      // ====== Clear peaks / ATH ======
-      clearPeak(){
-        if(this.state.peakArray) this.state.peakArray.fill(0);
-        if(this.state.peakOct) this.state.peakOct.fill(-Infinity);
-        this.state.allTimeHighPeak={freq:0,val:-Infinity};
-        this.dom.athPeak.textContent='—';
-        this.dom.heatmapAthText.textContent='ATH: —';
-        this.dom.fftPeakText.textContent='Peak: —';
-        this.dom.fftHoldText.textContent='Hold: —';
-        this.dom.octPeakText.textContent='Peak: —';
-        this.dom.octHoldText.textContent='Hold: —';
-      }
     }
 
     // ====== Boot ======
@@ -958,9 +891,6 @@ html, body { overflow-x: hidden; } /* prevent accidental horizontal scrollbars i
       t('calibration +1 within bounds', ()=>{ const s=app.dom.calibrationSlider; const prev=parseFloat(s.value); app.adjustCalibration(+1); const now=parseFloat(s.value); const max=parseFloat(s.max); if(now!==Math.min(prev+1,max)) throw new Error(`${prev} -> ${now}`); });
       t('calibration sync number', ()=>{ const s=app.dom.calibrationSlider; const n=app.dom.calibrationOffset; if(parseFloat(s.value)!==parseFloat(n.value)) throw new Error('desync'); });
       t('calibration not below min', ()=>{ const s=app.dom.calibrationSlider; s.value=s.min; app.adjustCalibration(-5); if(parseFloat(s.value)!==parseFloat(s.min)) throw new Error('below min'); });
-      // genBands shape
-      t('genBands returns bands', ()=>{ const b=app.genBands(12); if(!Array.isArray(b)||b.length===0||!('fc' in b[0])) throw new Error('bad bands'); });
-      t('genHeatmapBins length', ()=>{ const m=app.genHeatmapBins(); if(!m || m.length===0) throw new Error('bad map'); });
     })();
   })();
   </script>
